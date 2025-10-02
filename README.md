@@ -101,7 +101,7 @@ If you find the dataset helpful, please consider citing ***LEXam***:
 ```shell
 @article{fan2025lexam,
   title={LEXam: Benchmarking Legal Reasoning on 340 Law Exams},
-  author={Fan, Yu and Ni, Jingwei and Merane, Jakob and Salimbeni, Etienne and Tian, Yang and Hermstr{\"u}wer, Yoan and Huang, Yinya and Akhtar, Mubashara and Geering, Florian and Dreyer, Oliver and others},
+  author={Fan, Yu and Ni, Jingwei and Merane, Jakob and Tian, Yang and Hermstr{\"u}wer, Yoan and Huang, Yinya and Akhtar, Mubashara and Salimbeni, Etienne and Geering, Florian and Dreyer, Oliver and others},
   journal={arXiv preprint arXiv:2505.12864},
   year={2025}
 }
