@@ -9,7 +9,7 @@
 ### This repository provides code for evaluating LLMs on ***LEXam***. 
 
 
-[![Project Page](https://img.shields.io/badge/-Project_Page-blue)](https://lexam-benchmark.github.io/)
+[![Project Page](https://img.shields.io/badge/Project%20Page-blue)](https://lexam-benchmark.github.io/)
 [![Hugging Face](https://img.shields.io/badge/Hugging%20Face-FFD21E?logo=huggingface&logoColor=000)](https://huggingface.co/datasets/LEXam-Benchmark/LEXam)
 [![arXiv](https://img.shields.io/badge/arXiv-2505.12864-b31b1b)](https://arxiv.org/abs/2505.12864)
 
