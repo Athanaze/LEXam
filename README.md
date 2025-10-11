@@ -12,7 +12,7 @@
 [![Project Page](https://img.shields.io/badge/Project%20Page-blue)](https://lexam-benchmark.github.io/)
 [![arXiv](https://img.shields.io/badge/arXiv-2505.12864-b31b1b)](https://arxiv.org/abs/2505.12864)
 [![license](https://img.shields.io/github/license/LEXam-Benchmark/LEXam?label=Code%20License)](https://github.com/LEXam-Benchmark/LEXam/blob/main/LICENSE)
-[![Data License](https://img.shields.io/badge/Data%20License-CC%20BY%204.0-lightgrey.svg)](https://github.com/LEXam-Benchmark/LEXam/blob/main/LICENSE_DATA)
+[![Data License](https://img.shields.io/badge/Data%20License-CC--BY--4.0-orange.svg)](https://github.com/LEXam-Benchmark/LEXam/blob/main/LICENSE_DATA)
 
 ## 🚀🔄 Reproducing Paper results or Evaluating your own LLM
 
