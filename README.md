@@ -10,8 +10,8 @@
 
 [//]: [![Website](https://img.shields.io/badge/Website-lexam--benchmark.github.io-blue)](https://lexam-benchmark.github.io)
 
-[![Project Homepage](https://img.shields.io/badge/Project%20Homepage-blue)](https://lexam-benchmark.github.io/)
-[![Hugging Face](https://img.shields.io/badge/Hugging%20Face-FFD21E?logo=huggingface&logoColor=000)](https://huggingface.co/datasets/LEXam-Benchmark/LEXam)
+[![Homepage](https://img.shields.io/badge/LEXam-Homepage-blue)](https://lexam-benchmark.github.io/)
+[![Data](https://img.shields.io/badge/Data-Hugging%20Face-FFD21E)](https://huggingface.co/datasets/LEXam-Benchmark/LEXam)
 [![arXiv](https://img.shields.io/badge/arXiv-2505.12864-b31b1b)](https://arxiv.org/abs/2505.12864)
 [![license](https://img.shields.io/github/license/LEXam-Benchmark/LEXam?label=Code%20License)](https://github.com/LEXam-Benchmark/LEXam/blob/main/LICENSE)
 [![Data License](https://img.shields.io/badge/Data%20License-CC--BY--4.0-orange.svg)](https://github.com/LEXam-Benchmark/LEXam/blob/main/LICENSE_DATA)
