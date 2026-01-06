@@ -157,66 +157,86 @@ def get_fulltext_candidates(tx, index_name: str, query: str, limit: int) -> List
     return [(r["id"], dict(r["node"]), float(r["score"])) for r in rows]
 
 
-def get_vector_candidates(tx, limit: int) -> List[Tuple[int, Dict[str, Any]]]:
+def get_vector_candidates(
+    tx,
+    index_name: str,
+    query_emb: List[float],
+    k: int,
+    limit: int,
+) -> List[Tuple[int, Dict[str, Any], float]]:
     cypher = (
-        "MATCH (c:court_decisions) "
-        "WHERE c.embeddings IS NOT NULL "
-        "RETURN id(c) AS id, c AS node "
+        "CALL db.index.vector.queryNodes($index_name, $k, $query) "
+        "YIELD node, score "
+        "MATCH (node)<-[:HAS_EMBEDDING]-(d:court_decisions) "
+        "WITH d, max(score) AS score "
+        "RETURN id(d) AS id, d AS node, score AS score "
+        "ORDER BY score DESC "
         "LIMIT $limit"
     )
-    rows = tx.run(cypher, limit=limit)
-    return [(r["id"], dict(r["node"])) for r in rows]
+    rows = tx.run(cypher, index_name=index_name, k=k, query=query_emb, limit=limit)
+    return [(r["id"], dict(r["node"]), float(r["score"])) for r in rows]
 
 
-def get_neighbors(tx, node_id: int, limit: int) -> List[Tuple[int, Dict[str, Any]]]:
+def get_neighbors(
+    tx,
+    node_id: int,
+    query_emb: List[float],
+    limit: int,
+) -> List[Tuple[int, Dict[str, Any], float]]:
     cypher = (
-        "MATCH (c:court_decisions)-[r]-(n) "
-        "WHERE id(c) = $node_id AND n.embeddings IS NOT NULL "
-        "RETURN id(n) AS id, n AS node "
+        "MATCH (c:court_decisions)-[]-(n:court_decisions) "
+        "WHERE id(c) = $node_id "
+        "MATCH (n)-[:HAS_EMBEDDING]->(e:DecisionEmbedding) "
+        "WITH n, max(vector.similarity.cosine(e.embedding, $query)) AS sim "
+        "RETURN id(n) AS id, n AS node, sim AS sim "
+        "ORDER BY sim DESC "
         "LIMIT $limit"
     )
-    rows = tx.run(cypher, node_id=node_id, limit=limit)
-    return [(r["id"], dict(r["node"])) for r in rows]
-
-
-def best_embedding_similarity(query_emb: List[float], doc_embs: Any) -> float:
-    if not isinstance(doc_embs, list):
-        return 0.0
-    best = 0.0
-    for vec in doc_embs:
-        if isinstance(vec, list):
-            sim = cosine_similarity(query_emb, vec)
-            if sim > best:
-                best = sim
-    return best
+    rows = tx.run(cypher, node_id=node_id, query=query_emb, limit=limit)
+    return [(r["id"], dict(r["node"]), float(r["sim"]) if r["sim"] is not None else 0.0) for r in rows]
 
 
 def retrieve_top_docs(
     driver,
     issue_text: str,
     issue_emb: List[float],
-    index_name: str,
+    fulltext_index: str,
+    vector_index: str,
     top_k: int,
-    vector_pool_limit: int,
+    vector_candidates_k: int,
     alpha: float,
+    database: Optional[str],
 ) -> List[Dict[str, Any]]:
-    with driver.session() as session:
-        bm25_rows = session.execute_read(get_fulltext_candidates, index_name, issue_text, top_k * 5)
-        vector_rows = session.execute_read(get_vector_candidates, vector_pool_limit)
+    with driver.session(database=database) as session:
+        bm25_rows = session.execute_read(get_fulltext_candidates, fulltext_index, issue_text, top_k * 5)
+        vector_rows = session.execute_read(
+            get_vector_candidates,
+            vector_index,
+            issue_emb,
+            max(vector_candidates_k, top_k),
+            top_k * 5,
+        )
 
     bm25_by_id = {doc_id: (props, score) for doc_id, props, score in bm25_rows}
-    max_bm25 = max([s for _, _, s in bm25_rows], default=1.0)
+    vec_by_id = {doc_id: (props, score) for doc_id, props, score in vector_rows}
 
+    max_bm25 = max([s for _, _, s in bm25_rows], default=1.0)
+    max_vec = max([s for _, _, s in vector_rows], default=1.0)
+
+    all_ids = set(bm25_by_id) | set(vec_by_id)
     scored = []
-    for doc_id, props in vector_rows:
-        sim = best_embedding_similarity(issue_emb, props.get("embeddings"))
+    for doc_id in all_ids:
+        props = vec_by_id.get(doc_id, bm25_by_id.get(doc_id))[0]
+        vec_score = vec_by_id.get(doc_id, (None, 0.0))[1]
         bm25_score = bm25_by_id.get(doc_id, (None, 0.0))[1]
-        combined = alpha * sim + (1 - alpha) * (bm25_score / max_bm25)
+        vec_norm = vec_score / max_vec if max_vec else 0.0
+        bm25_norm = bm25_score / max_bm25 if max_bm25 else 0.0
+        combined = alpha * vec_norm + (1 - alpha) * bm25_norm
         scored.append(
             {
                 "id": doc_id,
                 "props": props,
-                "vector_sim": sim,
+                "vector_sim": vec_score,
                 "bm25": bm25_score,
                 "score": combined,
             }
@@ -253,15 +273,15 @@ async def explore_neighbors(
     neighbor_parallel: int,
     min_sim: float,
     max_delta: float,
+    database: Optional[str],
 ) -> List[Dict[str, Any]]:
     expanded: List[Dict[str, Any]] = []
     for doc in seed_docs:
         base_sim = doc.get("vector_sim", 0.0)
-        with driver.session() as session:
-            neighbors = session.execute_read(get_neighbors, doc["id"], neighbor_limit)
+        with driver.session(database=database) as session:
+            neighbors = session.execute_read(get_neighbors, doc["id"], issue_emb, neighbor_limit)
         scored_neighbors = []
-        for nid, props in neighbors:
-            sim = best_embedding_similarity(issue_emb, props.get("embeddings"))
+        for nid, props, sim in neighbors:
             if sim < min_sim or (base_sim - sim) > max_delta:
                 continue
             scored_neighbors.append({"id": nid, "props": props, "vector_sim": sim, "bm25": 0.0, "score": sim})
@@ -308,8 +328,9 @@ def main():
     parser.add_argument("--neo4j_password", default=os.getenv("NEO4J_PASSWORD", ""))
     parser.add_argument("--neo4j_database", default=os.getenv("NEO4J_DATABASE", "neo4j"))
     parser.add_argument("--fulltext_index", default=os.getenv("NEO4J_FULLTEXT_INDEX", "court_decisions_qjt"))
+    parser.add_argument("--vector_index", default=os.getenv("NEO4J_VECTOR_INDEX", "decision_embedding_idx"))
     parser.add_argument("--top_k", type=int, default=10)
-    parser.add_argument("--vector_pool_limit", type=int, default=5000)
+    parser.add_argument("--vector_candidates_k", type=int, default=200)
     parser.add_argument("--alpha", type=float, default=0.6)
     parser.add_argument("--doc_score_parallel", type=int, default=8)
     parser.add_argument("--neighbor_limit", type=int, default=40)
@@ -348,9 +369,11 @@ def main():
                 issue,
                 issue_emb,
                 args.fulltext_index,
+                args.vector_index,
                 args.top_k,
-                args.vector_pool_limit,
+                args.vector_candidates_k,
                 args.alpha,
+                args.neo4j_database,
             )
             scored = asyncio.run(score_docs(llm, question, top_docs, args.doc_score_parallel))
             kept = [d for d in scored if d.get("help_score", 0) >= 4]
@@ -367,6 +390,7 @@ def main():
                         args.neighbor_parallel,
                         args.neighbor_min_sim,
                         args.neighbor_max_delta,
+                        args.neo4j_database,
                     )
                 )
                 kept.extend([d for d in expanded if d.get("help_score", 0) >= 4])

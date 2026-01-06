@@ -12,10 +12,9 @@ This project answers LEXam multiple‑choice questions with a custom **agentic g
    - Embed each extracted issue with the `gemma-3-300m-embedding` model (default: `together_ai/google/gemma-3-300m-embedding`).
 
 3. **Graph retrieval (Neo4j)**
-   - Query **court_decisions** nodes that store:
-     - `embeddings`: list of vectors
-     - `questions juridiques traitees`: list of strings
-   - Compute **cosine similarity** between each issue embedding and the node’s embeddings list (max similarity per node).
+   - Query **DecisionEmbedding** nodes (one per vector) linked to **court_decisions**.
+   - Vector search uses a Neo4j **vector index** with cosine similarity.
+   - Aggregate best vector score per decision.
    - Run **BM25** over `questions juridiques traitees` using Neo4j full‑text index.
    - Combine vector similarity + BM25 and keep **top 10**.
 
@@ -47,13 +46,17 @@ python do_exam.py \
 
 ## Neo4j setup expectations
 
-- **Node label**: `court_decisions`
-- **Properties**:
-  - `embeddings`: list of vectors
+- **Decision nodes**: `court_decisions`
   - `questions juridiques traitees`: list of strings
-- **Full‑text index** (BM25):
-  - Default index name: `court_decisions_qjt`
-  - Must index the `questions juridiques traitees` property
+- **Embedding nodes**: `DecisionEmbedding`
+  - `embedding`: single vector
+  - Relationship: `(court_decisions)-[:HAS_EMBEDDING]->(DecisionEmbedding)`
+- **Vector index**:
+  - Default name: `decision_embedding_idx`
+  - Indexes `DecisionEmbedding.embedding` with cosine similarity
+- **Full‑text index (BM25)**:
+  - Default name: `court_decisions_qjt`
+  - Indexes `questions juridiques traitees`
 
 ## Configuration (env vars / args)
 
@@ -62,12 +65,13 @@ python do_exam.py \
 - `NEO4J_PASSWORD`
 - `NEO4J_DATABASE` (default `neo4j`)
 - `NEO4J_FULLTEXT_INDEX` (default `court_decisions_qjt`)
+- `NEO4J_VECTOR_INDEX` (default `decision_embedding_idx`)
 
 Key CLI args:
 
 - `--embedding_model` (default `together_ai/google/gemma-3-300m-embedding`)
 - `--top_k` (default `10`)
-- `--vector_pool_limit` (default `5000`)
+- `--vector_candidates_k` (default `200`)
 - `--alpha` (vector/BM25 mix, default `0.6`)
 - `--time_budget_s` (default `40`)
 - `--neighbor_parallel` (default `4`)
@@ -84,4 +88,4 @@ A CSV with:
 ## Notes
 
 - BM25 is run through Neo4j full‑text index; adjust `--fulltext_index` if your index has a different name.
-- If your graph is large, raise `--vector_pool_limit` cautiously or implement a vector index to avoid scanning too many nodes.
+- Vector search uses the Neo4j vector index; adjust `--vector_index` if your index has a different name.
